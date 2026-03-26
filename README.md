@@ -436,13 +436,5 @@ On first load, a modal asks for your Anthropic API key:
 
 ---
 
-## 10. AI Session Logs
-
-See `ai-session-logs/claude-session-transcript.md` for the full transcript.
-
-**Tool used:** Claude.ai (claude-sonnet-4-20250514)  
-**Session date:** 26 March 2025  
-
----
 
 *O2C Graph Intelligence System — Dodge AI FDE Assessment — March 2025*
