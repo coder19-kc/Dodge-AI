@@ -1,0 +1,1570 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>O2C Graph Intelligence — Order to Cash</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
+
+  :root {
+    --bg: #0a0c10;
+    --surface: #111318;
+    --surface2: #171a22;
+    --border: #1e2230;
+    --border2: #2a2f40;
+    --text: #e2e8f0;
+    --text2: #8892a4;
+    --text3: #4a5568;
+    --accent: #4f9cf9;
+    --accent2: #7c3aed;
+    --green: #22c55e;
+    --orange: #f59e0b;
+    --red: #ef4444;
+    --cyan: #06b6d4;
+    --pink: #ec4899;
+
+    --node-customer: #7c3aed;
+    --node-so: #2563eb;
+    --node-delivery: #0891b2;
+    --node-billing: #059669;
+    --node-journal: #d97706;
+    --node-payment: #dc2626;
+    --node-product: #7c3aed;
+    --node-plant: #64748b;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'IBM Plex Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* HEADER */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px;
+    height: 52px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    flex-shrink: 0;
+    z-index: 100;
+  }
+
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    color: var(--accent);
+  }
+
+  .logo-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 10px var(--accent); }
+
+  .breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text2);
+    font-family: 'IBM Plex Mono', monospace;
+  }
+
+  .breadcrumb span { color: var(--text3); }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .stat-badge {
+    padding: 3px 10px;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: 4px;
+    font-size: 11px;
+    font-family: 'IBM Plex Mono', monospace;
+    color: var(--text2);
+  }
+
+  .stat-badge strong { color: var(--accent); }
+
+  /* CONTROLS */
+  .controls {
+    padding: 8px 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .controls label {
+    font-size: 11px;
+    color: var(--text3);
+    font-family: 'IBM Plex Mono', monospace;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-right: 2px;
+  }
+
+  .filter-btn {
+    padding: 4px 12px;
+    border-radius: 4px;
+    border: 1px solid var(--border2);
+    background: var(--surface2);
+    color: var(--text2);
+    font-size: 11px;
+    font-family: 'IBM Plex Mono', monospace;
+    cursor: pointer;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .filter-btn:hover { border-color: var(--accent); color: var(--text); }
+  .filter-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(79,156,249,0.1); }
+
+  .filter-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+  }
+
+  .controls-sep { width: 1px; height: 20px; background: var(--border); margin: 0 4px; }
+
+  .legend {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-left: auto;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 10px;
+    color: var(--text3);
+    font-family: 'IBM Plex Mono', monospace;
+  }
+
+  .legend-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+  }
+
+  /* MAIN LAYOUT */
+  .main {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* GRAPH AREA */
+  .graph-area {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+  }
+
+  #graph-svg {
+    width: 100%;
+    height: 100%;
+  }
+
+  /* NODE TOOLTIP */
+  .node-tooltip {
+    position: absolute;
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: 8px;
+    padding: 12px;
+    max-width: 280px;
+    font-size: 11px;
+    font-family: 'IBM Plex Mono', monospace;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+    pointer-events: none;
+    z-index: 1000;
+    display: none;
+  }
+
+  .tooltip-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .tooltip-badge {
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .tooltip-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 3px;
+    color: var(--text2);
+  }
+
+  .tooltip-row .key { color: var(--text3); flex-shrink: 0; }
+  .tooltip-row .val { color: var(--text); text-align: right; word-break: break-all; }
+
+  .tooltip-connections {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+    color: var(--text3);
+    font-size: 10px;
+  }
+
+  /* CHAT PANEL */
+  .chat-panel {
+    width: 380px;
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    background: var(--surface);
+    flex-shrink: 0;
+  }
+
+  .chat-header {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .chat-title {
+    font-size: 12px;
+    font-weight: 600;
+    font-family: 'IBM Plex Mono', monospace;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .chat-status {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 10px;
+    color: var(--text3);
+    font-family: 'IBM Plex Mono', monospace;
+  }
+
+  .status-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 6px var(--green);
+  }
+
+  .status-dot.thinking {
+    background: var(--orange);
+    box-shadow: 0 0 6px var(--orange);
+    animation: pulse 1s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  /* MESSAGES */
+  .chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border2) transparent;
+  }
+
+  .chat-messages::-webkit-scrollbar { width: 4px; }
+  .chat-messages::-webkit-scrollbar-track { background: transparent; }
+  .chat-messages::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+  .msg {
+    max-width: 94%;
+    animation: fadeUp 0.2s ease;
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .msg.user { align-self: flex-end; }
+  .msg.assistant { align-self: flex-start; }
+
+  .msg-bubble {
+    padding: 9px 12px;
+    border-radius: 8px;
+    font-size: 12px;
+    line-height: 1.55;
+  }
+
+  .msg.user .msg-bubble {
+    background: rgba(79,156,249,0.15);
+    border: 1px solid rgba(79,156,249,0.3);
+    color: var(--text);
+    border-bottom-right-radius: 2px;
+  }
+
+  .msg.assistant .msg-bubble {
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    color: var(--text);
+    border-bottom-left-radius: 2px;
+  }
+
+  .msg-label {
+    font-size: 9px;
+    font-family: 'IBM Plex Mono', monospace;
+    color: var(--text3);
+    margin-bottom: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  .msg.user .msg-label { text-align: right; }
+
+  .msg-bubble pre {
+    background: rgba(0,0,0,0.3);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 8px;
+    margin: 6px 0;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    color: var(--cyan);
+  }
+
+  .msg-bubble .highlight {
+    color: var(--accent);
+    font-weight: 600;
+    font-family: 'IBM Plex Mono', monospace;
+  }
+
+  .msg-bubble table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+    margin: 6px 0;
+  }
+
+  .msg-bubble th {
+    text-align: left;
+    padding: 4px 6px;
+    color: var(--text3);
+    border-bottom: 1px solid var(--border2);
+    font-weight: 500;
+    font-size: 10px;
+  }
+
+  .msg-bubble td {
+    padding: 3px 6px;
+    border-bottom: 1px solid var(--border);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+  }
+
+  .msg-bubble tr:last-child td { border-bottom: none; }
+
+  /* SUGGESTIONS */
+  .suggestions {
+    padding: 10px 12px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .suggestions-label {
+    font-size: 9px;
+    color: var(--text3);
+    font-family: 'IBM Plex Mono', monospace;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 2px;
+  }
+
+  .suggestion-chip {
+    padding: 5px 10px;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: 4px;
+    font-size: 11px;
+    color: var(--text2);
+    cursor: pointer;
+    transition: all 0.15s;
+    text-align: left;
+    font-family: 'IBM Plex Sans', sans-serif;
+  }
+
+  .suggestion-chip:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(79,156,249,0.08);
+  }
+
+  /* CHAT INPUT */
+  .chat-input-area {
+    padding: 12px;
+    border-top: 1px solid var(--border);
+  }
+
+  .input-wrapper {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: 8px;
+    padding: 8px 12px;
+    transition: border-color 0.15s;
+  }
+
+  .input-wrapper:focus-within { border-color: var(--accent); }
+
+  #chat-input {
+    flex: 1;
+    background: none;
+    border: none;
+    outline: none;
+    color: var(--text);
+    font-size: 12px;
+    font-family: 'IBM Plex Sans', sans-serif;
+    resize: none;
+    max-height: 80px;
+    line-height: 1.5;
+  }
+
+  #chat-input::placeholder { color: var(--text3); }
+
+  #send-btn {
+    background: var(--accent);
+    border: none;
+    border-radius: 5px;
+    width: 28px;
+    height: 28px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: all 0.15s;
+    color: white;
+  }
+
+  #send-btn:hover { background: #3b82f6; }
+  #send-btn:disabled { background: var(--border2); cursor: not-allowed; }
+
+  /* GRAPH CONTROLS OVERLAY */
+  .graph-controls {
+    position: absolute;
+    bottom: 16px;
+    left: 16px;
+    display: flex;
+    gap: 6px;
+    z-index: 10;
+  }
+
+  .graph-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    color: var(--text2);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    transition: all 0.15s;
+  }
+
+  .graph-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  /* INFO PANEL (node detail) */
+  .info-panel {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    width: 240px;
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: 8px;
+    z-index: 50;
+    display: none;
+    animation: fadeUp 0.15s ease;
+  }
+
+  .info-panel-header {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .info-panel-title {
+    font-size: 12px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 600;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .info-close {
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: var(--text3);
+    font-size: 14px;
+    border-radius: 3px;
+  }
+
+  .info-close:hover { color: var(--text); background: var(--border); }
+
+  .info-panel-body {
+    padding: 10px 12px;
+    font-size: 11px;
+    font-family: 'IBM Plex Mono', monospace;
+    max-height: 300px;
+    overflow-y: auto;
+  }
+
+  .info-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 4px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .info-row:last-child { border-bottom: none; margin-bottom: 0; }
+  .info-key { color: var(--text3); flex-shrink: 0; }
+  .info-val { color: var(--text); text-align: right; font-size: 10px; word-break: break-all; }
+
+  .info-panel-connections {
+    padding: 8px 12px;
+    border-top: 1px solid var(--border);
+    font-size: 10px;
+    color: var(--text3);
+    font-family: 'IBM Plex Mono', monospace;
+  }
+
+  .conn-tag {
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 3px;
+    border: 1px solid var(--border2);
+    margin: 2px 2px 2px 0;
+    font-size: 9px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .conn-tag:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* Loading */
+  .loading-dots {
+    display: flex;
+    gap: 4px;
+    padding: 8px 12px;
+    align-items: center;
+  }
+
+  .loading-dots span {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--text3);
+    animation: bounce 1.2s infinite;
+  }
+
+  .loading-dots span:nth-child(2) { animation-delay: 0.2s; }
+  .loading-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+  @keyframes bounce {
+    0%, 100% { transform: translateY(0); opacity: 0.4; }
+    50% { transform: translateY(-4px); opacity: 1; }
+  }
+
+  /* HIGHLIGHTED NODES */
+  .highlighted-circle {
+    stroke: var(--accent) !important;
+    stroke-width: 3px !important;
+    filter: drop-shadow(0 0 8px var(--accent));
+  }
+
+  /* API KEY MODAL */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    backdrop-filter: blur(4px);
+  }
+
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: 12px;
+    padding: 28px;
+    width: 400px;
+    animation: fadeUp 0.2s ease;
+  }
+
+  .modal-title {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 6px;
+    font-family: 'IBM Plex Mono', monospace;
+    color: var(--accent);
+  }
+
+  .modal-sub {
+    font-size: 12px;
+    color: var(--text2);
+    margin-bottom: 20px;
+    line-height: 1.6;
+  }
+
+  .modal-input {
+    width: 100%;
+    padding: 10px 12px;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 13px;
+    font-family: 'IBM Plex Mono', monospace;
+    outline: none;
+    margin-bottom: 14px;
+    transition: border-color 0.15s;
+  }
+
+  .modal-input:focus { border-color: var(--accent); }
+
+  .modal-btn {
+    width: 100%;
+    padding: 10px;
+    background: var(--accent);
+    border: none;
+    border-radius: 6px;
+    color: white;
+    font-size: 13px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+
+  .modal-btn:hover { background: #3b82f6; }
+
+  .modal-note {
+    font-size: 10px;
+    color: var(--text3);
+    margin-top: 10px;
+    text-align: center;
+    font-family: 'IBM Plex Mono', monospace;
+  }
+
+  /* SVG styles */
+  .link {
+    stroke: var(--border2);
+    stroke-width: 1;
+    fill: none;
+    opacity: 0.6;
+    transition: opacity 0.2s;
+  }
+
+  .link:hover { opacity: 1; stroke: var(--accent); }
+
+  .link.highlighted { stroke: var(--accent); opacity: 0.9; stroke-width: 2; }
+
+  .node circle {
+    cursor: pointer;
+    transition: filter 0.2s;
+  }
+
+  .node circle:hover {
+    filter: brightness(1.3);
+  }
+
+  .node text {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    fill: var(--text2);
+    pointer-events: none;
+    text-anchor: middle;
+  }
+
+  /* Search highlight */
+  .node.search-hit circle {
+    filter: drop-shadow(0 0 10px gold) brightness(1.4);
+  }
+</style>
+</head>
+<body>
+
+<!-- API KEY MODAL -->
+<div class="modal-overlay" id="api-modal">
+  <div class="modal">
+    <div class="modal-title">⬡ O2C Graph Intelligence</div>
+    <div class="modal-sub">Enter your Anthropic API key to enable the AI query interface. The key is used only in your browser and never sent to any server.</div>
+    <input type="password" class="modal-input" id="api-key-input" placeholder="gsk_..." autocomplete="off">
+    <button class="modal-btn" id="api-key-submit">Initialize System →</button>
+    <div class="modal-note">Your key stays local. Press Enter to continue.</div>
+  </div>
+</div>
+
+<!-- HEADER -->
+<header>
+  <div class="header-left">
+    <div class="logo">
+      <div class="logo-dot"></div>
+      O2C GRAPH
+    </div>
+    <div class="breadcrumb">
+      <span>▸</span> Mapping <span>/</span> Order to Cash
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="stat-badge">Nodes: <strong id="node-count">—</strong></div>
+    <div class="stat-badge">Edges: <strong id="edge-count">—</strong></div>
+    <div class="stat-badge">Entities: <strong>8 types</strong></div>
+  </div>
+</header>
+
+<!-- CONTROLS -->
+<div class="controls">
+  <label>FILTER:</label>
+  <button class="filter-btn active" data-type="all">All</button>
+  <button class="filter-btn" data-type="Customer"><span class="filter-dot" style="background:var(--node-customer)"></span>Customer</button>
+  <button class="filter-btn" data-type="SalesOrder"><span class="filter-dot" style="background:var(--node-so)"></span>Sales Order</button>
+  <button class="filter-btn" data-type="Delivery"><span class="filter-dot" style="background:var(--node-delivery)"></span>Delivery</button>
+  <button class="filter-btn" data-type="BillingDoc"><span class="filter-dot" style="background:var(--node-billing)"></span>Billing</button>
+  <button class="filter-btn" data-type="JournalEntry"><span class="filter-dot" style="background:var(--node-journal)"></span>Journal</button>
+  <button class="filter-btn" data-type="Payment"><span class="filter-dot" style="background:var(--node-payment)"></span>Payment</button>
+
+  <div class="controls-sep"></div>
+
+  <div class="legend">
+    <div class="legend-item"><span class="legend-dot" style="background:var(--node-customer)"></span>Customer</div>
+    <div class="legend-item"><span class="legend-dot" style="background:var(--node-so)"></span>Sales Order</div>
+    <div class="legend-item"><span class="legend-dot" style="background:var(--node-delivery)"></span>Delivery</div>
+    <div class="legend-item"><span class="legend-dot" style="background:var(--node-billing)"></span>Billing</div>
+    <div class="legend-item"><span class="legend-dot" style="background:var(--node-journal)"></span>Journal</div>
+    <div class="legend-item"><span class="legend-dot" style="background:var(--node-payment)"></span>Payment</div>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+
+  <!-- GRAPH -->
+  <div class="graph-area">
+    <svg id="graph-svg"></svg>
+
+    <!-- Info Panel -->
+    <div class="info-panel" id="info-panel">
+      <div class="info-panel-header">
+        <div class="info-panel-title" id="info-title">Node Details</div>
+        <div class="info-close" id="info-close">✕</div>
+      </div>
+      <div class="info-panel-body" id="info-body"></div>
+      <div class="info-panel-connections" id="info-connections"></div>
+    </div>
+
+    <!-- Graph Controls -->
+    <div class="graph-controls">
+      <button class="graph-btn" id="zoom-in" title="Zoom In">+</button>
+      <button class="graph-btn" id="zoom-out" title="Zoom Out">−</button>
+      <button class="graph-btn" id="zoom-fit" title="Fit View">⊡</button>
+      <button class="graph-btn" id="toggle-labels" title="Toggle Labels">Aa</button>
+    </div>
+  </div>
+
+  <!-- CHAT PANEL -->
+  <div class="chat-panel">
+    <div class="chat-header">
+      <div class="chat-title">
+        ◈ Chat with Graph
+        <span style="color:var(--text3);font-weight:400">— Order to Cash</span>
+      </div>
+      <div class="chat-status">
+        <div class="status-dot" id="status-dot"></div>
+        <span id="status-text">Ready</span>
+      </div>
+    </div>
+
+    <div class="chat-messages" id="chat-messages">
+      <div class="msg assistant">
+        <div class="msg-label">Graph AI</div>
+        <div class="msg-bubble">
+          Hi! I can help you analyze the <span class="highlight">Order to Cash</span> process graph.<br><br>
+          I have access to <span class="highlight">100 sales orders</span>, <span class="highlight">86 deliveries</span>, <span class="highlight">163 billing documents</span>, <span class="highlight">123 journal entries</span>, and <span class="highlight">8 customers</span> in this dataset.<br><br>
+          Ask me anything about the O2C flow, or click on a node to explore it.
+        </div>
+      </div>
+    </div>
+
+    <div class="suggestions">
+      <div class="suggestions-label">Try asking:</div>
+      <button class="suggestion-chip" data-q="Which products are associated with the highest number of billing documents?">📦 Products with most billing docs?</button>
+      <button class="suggestion-chip" data-q="Trace the full flow of billing document 91150187">🔍 Trace billing doc 91150187</button>
+      <button class="suggestion-chip" data-q="Identify sales orders with incomplete or broken flows">⚠️ Identify broken/incomplete flows</button>
+      <button class="suggestion-chip" data-q="Which customer has the highest total order value?">💰 Top customer by order value?</button>
+    </div>
+
+    <div class="chat-input-area">
+      <div class="input-wrapper">
+        <textarea id="chat-input" rows="1" placeholder="Ask about the O2C process..."></textarea>
+        <button id="send-btn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ========== DATA ==========
+const RAW = {"so":[{"salesOrder":"740506","soldToParty":"310000108","creationDate":"2025-03-31T00:00:00.000Z","totalNetAmount":"17108.25","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740507","soldToParty":"310000109","creationDate":"2025-03-31T00:00:00.000Z","totalNetAmount":"19021.27","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740508","soldToParty":"310000109","creationDate":"2025-03-31T00:00:00.000Z","totalNetAmount":"883.88","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740509","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"229.66","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740510","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"221.19","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740511","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"250","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740512","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"249.15","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740513","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"363.56","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740514","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"363.56","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740515","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"363.56","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740516","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"272.88","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740517","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"363.56","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740518","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"363.56","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740519","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"329.66","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740520","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"253.39","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740521","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"363.56","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740522","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"329.66","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740523","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"363.56","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740524","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"253.39","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740525","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"215.25","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740526","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"185.59","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740527","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"449.24","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740528","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"253.39","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740529","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"216.1","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740530","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"179.66","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740531","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"215.25","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740532","soldToParty":"320000082","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"167","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740533","soldToParty":"320000082","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"382.9","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740534","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"310.76","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740535","soldToParty":"320000082","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"179","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740536","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"168.64","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740537","soldToParty":"320000082","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"245.9","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740538","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"287.29","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740539","soldToParty":"320000082","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"254","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740540","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"253.39","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740541","soldToParty":"320000082","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"299","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740542","soldToParty":"320000082","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"589.95","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740543","soldToParty":"320000082","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"245.9","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740544","soldToParty":"320000082","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"287.9","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740545","soldToParty":"320000088","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"179.66","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740546","soldToParty":"320000085","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"221.19","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740547","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"180.34","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740548","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"151.69","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740549","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"2033.65","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740550","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"329.66","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740551","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"221.19","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740552","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"216.1","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740553","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"561.14","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740554","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"422.88","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740555","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"429.66","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740556","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"439.83","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740557","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"439.83","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740558","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"179.66","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740559","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"375.42","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740560","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"253.39","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740561","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"422.03","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740562","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"843.73","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740563","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"481.44","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740564","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"761.86","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740565","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"422.03","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740566","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"337.29","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740567","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"191.53","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740568","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"455.93","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740569","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"422.03","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740570","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"422.03","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740571","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"253.39","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740572","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"215.25","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740573","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"842.93","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740574","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"327.97","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740575","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"215.25","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740576","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"473.73","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740577","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"464.41","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740578","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"464.41","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740579","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"464.41","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740580","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"464.41","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740581","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"205.93","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740582","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"216.1","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740583","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"216.1","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740584","soldToParty":"320000108","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"150.85","overallDeliveryStatus":"A","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740585","soldToParty":"320000107","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"177.97","overallDeliveryStatus":"A","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740586","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"422.03","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740587","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"464.41","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740588","soldToParty":"320000108","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"118.65","overallDeliveryStatus":"A","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740589","soldToParty":"320000107","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"131.31","overallDeliveryStatus":"A","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740590","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"464.41","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740591","soldToParty":"320000108","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"303.39","overallDeliveryStatus":"A","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740592","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"634.75","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740593","soldToParty":"320000107","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"422.04","overallDeliveryStatus":"A","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740594","soldToParty":"320000108","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"337.29","overallDeliveryStatus":"A","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740595","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"215.25","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740596","soldToParty":"320000108","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"202.54","overallDeliveryStatus":"A","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740597","soldToParty":"320000107","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"118.64","overallDeliveryStatus":"A","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740598","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"533.05","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740599","soldToParty":"320000108","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"202.56","overallDeliveryStatus":"A","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740600","soldToParty":"320000107","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"169.49","overallDeliveryStatus":"A","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740601","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"464.41","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740602","soldToParty":"320000107","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"131.38","overallDeliveryStatus":"A","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740603","soldToParty":"320000108","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"133.9","overallDeliveryStatus":"A","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740604","soldToParty":"320000083","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"1091.53","overallDeliveryStatus":"C","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"},{"salesOrder":"740605","soldToParty":"320000107","creationDate":"2025-04-02T00:00:00.000Z","totalNetAmount":"435.57","overallDeliveryStatus":"A","overallOrdReltdBillgStatus":"","transactionCurrency":"INR"}],"cust":[{"businessPartner":"310000108","customer":"310000108","businessPartnerFullName":"Cardenas, Parker and Avila","businessPartnerName":"Cardenas, Parker and Avila"},{"businessPartner":"310000109","customer":"310000109","businessPartnerFullName":"Bradley-Kelley","businessPartnerName":"Bradley-Kelley"},{"businessPartner":"320000082","customer":"320000082","businessPartnerFullName":"Nguyen-Davis","businessPartnerName":"Nguyen-Davis"},{"businessPartner":"320000083","customer":"320000083","businessPartnerFullName":"Nelson, Fitzpatrick and Jordan","businessPartnerName":"Nelson, Fitzpatrick and Jordan"},{"businessPartner":"320000085","customer":"320000085","businessPartnerFullName":"Hawkins Ltd","businessPartnerName":"Hawkins Ltd"},{"businessPartner":"320000088","customer":"320000088","businessPartnerFullName":"Flores-Simmons","businessPartnerName":"Flores-Simmons"},{"businessPartner":"320000107","customer":"320000107","businessPartnerFullName":"Henderson, Garner and Graves","businessPartnerName":"Henderson, Garner and Graves"},{"businessPartner":"320000108","customer":"320000108","businessPartnerFullName":"Melton Group","businessPartnerName":"Melton Group"}]};
+
+// Lookup maps
+const custMap = {};
+RAW.cust.forEach(c => { custMap[c.customer] = c.businessPartnerFullName; });
+
+const soMap = {};
+RAW.so.forEach(s => { soMap[s.salesOrder] = s; });
+
+// Complete data context for AI
+const DATA_CONTEXT = `
+SAP Order-to-Cash Dataset Summary:
+
+CUSTOMERS (8 total):
+- 310000108: Cardenas, Parker and Avila
+- 310000109: Bradley-Kelley  
+- 320000082: Nguyen-Davis
+- 320000083: Nelson, Fitzpatrick and Jordan (largest customer)
+- 320000085: Hawkins Ltd
+- 320000088: Flores-Simmons
+- 320000107: Henderson, Garner and Graves
+- 320000108: Melton Group
+
+SALES ORDERS (100 total):
+- Range: 740506 to 740605
+- Delivery status: "C" = Complete, "A" = Not yet delivered
+- Orders 740584-740605 with customers 320000107, 320000108 have status "A" (not delivered)
+- Orders 740506-740583 mostly have status "C" (delivered)
+- Customer 320000083 (Nelson, Fitzpatrick and Jordan) has the most orders (~65 orders)
+- Highest value SO: 740507 = INR 19,021.27, 740506 = INR 17,108.25
+- Total value of all SOs ~ INR 65,000+
+
+DELIVERIES (86 total):
+- Range: 80737721 to 80754606
+- Delivery items link to SOs via referenceSdDocument field
+- Shipping points: 1920 (Garyfort), WB05 (Cookmouth), KA05 (Jessicaside), MH05 (East Adrianamouth), 1301 (North Matthewview)
+- Most deliveries have overallGoodsMovementStatus "A" (not goods-issued), two have "C" (complete): 80754575, 80754576, 80738072
+
+BILLING DOCUMENTS (163 total):
+- Two series: 9050xxxx (original, mostly CANCELLED) and 9162xxxx / 9150xxxx (replacement, active)
+- Active billing docs: 91150083-91150217, 90504248, 90628265, 90628266
+- CANCELLED docs: 90504204-90504301, 90678696-90678703
+- Billing items reference delivery documents via referenceSdDocument
+- Notable: Most original billing docs were cancelled and reissued as 911xxxxx series
+
+JOURNAL ENTRIES (123 total):
+- Reference billing documents via referenceDocument field
+- clearingAccountingDocument links to payment
+- GL Account: 15500020 (Accounts Receivable)
+- Customer 320000083 has most journal entries
+
+PAYMENTS (120 total):
+- Links to journal entries via accountingDocument
+- clearingAccountingDocument links to clearing payment document
+- Most payments cleared on 2025-04-02
+
+KEY RELATIONSHIPS:
+- Customer → Sales Order (via soldToParty)
+- Sales Order → Delivery (via delivery_items.referenceSdDocument = salesOrder)  
+- Delivery → Billing Document (via billing_items.referenceSdDocument = deliveryDocument)
+- Billing Document → Journal Entry (via billing.accountingDocument = journal.accountingDocument)
+- Journal Entry → Payment (via accountingDocument)
+
+BROKEN/INCOMPLETE FLOWS:
+- Sales orders 740584-740605 (customers 320000107, 320000108): status "A" = NOT YET DELIVERED
+- These 14 orders from Melton Group (320000108) and Henderson, Garner and Graves (320000107) have no deliveries
+
+PRODUCT CATEGORIES: Personal care / grooming products
+- EDT/EDP fragrances, beard care, face serums, sunscreen, hair products, etc.
+
+TOP PRODUCTS BY BILLING FREQUENCY:
+- S8907367039280 (SUNSCREEN GEL SPF50): appears 14+ times
+- S8907367042006 (Destiny 100ml EDP): appears 10+ times  
+- S8907367008620 (FACESERUM 30ML VIT C): appears 10+ times
+- S8907367001003 (BEARDOIL 30ML): appears 8+ times
+- S8907367013532 (LIPBALM VIT E): appears 8+ times
+`;
+
+// ========== API KEY ==========
+let API_KEY = null;
+
+document.getElementById('api-key-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') document.getElementById('api-key-submit').click();
+});
+
+document.getElementById('api-key-submit').addEventListener('click', () => {
+  const val = document.getElementById('api-key-input').value.trim();
+  if (val) {
+    API_KEY = val;
+    document.getElementById('api-modal').style.display = 'none';
+    initGraph();
+  }
+});
+
+// ========== GRAPH CONSTRUCTION ==========
+function buildGraphData(filter = 'all') {
+  const nodes = [];
+  const links = [];
+  const nodeSet = new Set();
+
+  // Sample for visualization - use first 30 SOs and connected docs
+  const SAMPLE_SO = RAW.so.slice(0, 30);
+
+  // Customers
+  const custIds = new Set(SAMPLE_SO.map(s => s.soldToParty));
+  RAW.cust.filter(c => custIds.has(c.customer)).forEach(c => {
+    const id = 'cust_' + c.customer;
+    if (!nodeSet.has(id)) {
+      nodes.push({ id, type: 'Customer', label: c.businessPartnerFullName.split(',')[0], data: c, size: 16 });
+      nodeSet.add(id);
+    }
+  });
+
+  // Sales Orders
+  SAMPLE_SO.forEach(so => {
+    const id = 'so_' + so.salesOrder;
+    if (!nodeSet.has(id)) {
+      nodes.push({ id, type: 'SalesOrder', label: so.salesOrder, data: so, size: 8 });
+      nodeSet.add(id);
+    }
+    // Link customer → SO
+    const custId = 'cust_' + so.soldToParty;
+    if (nodeSet.has(custId)) {
+      links.push({ source: custId, target: id, rel: 'PLACED' });
+    }
+  });
+
+  // Deliveries (linked to sample SOs)
+  const sampleSOIds = new Set(SAMPLE_SO.map(s => s.salesOrder));
+  const delivItems = [{"deliveryDocument":"80737721","plant":"1920","referenceSdDocument":"740506"},{"deliveryDocument":"80737722","plant":"1920","referenceSdDocument":"740507"},{"deliveryDocument":"80737723","plant":"1920","referenceSdDocument":"740508"},{"deliveryDocument":"80737921","plant":"KA05","referenceSdDocument":"740545"},{"deliveryDocument":"80737922","plant":"MH05","referenceSdDocument":"740546"},{"deliveryDocument":"80738040","plant":"WB05","referenceSdDocument":"740509"},{"deliveryDocument":"80738041","plant":"WB05","referenceSdDocument":"740510"},{"deliveryDocument":"80738042","plant":"WB05","referenceSdDocument":"740511"},{"deliveryDocument":"80738043","plant":"WB05","referenceSdDocument":"740512"},{"deliveryDocument":"80738044","plant":"WB05","referenceSdDocument":"740513"},{"deliveryDocument":"80738045","plant":"WB05","referenceSdDocument":"740514"},{"deliveryDocument":"80738046","plant":"WB05","referenceSdDocument":"740515"},{"deliveryDocument":"80738047","plant":"WB05","referenceSdDocument":"740516"},{"deliveryDocument":"80738048","plant":"WB05","referenceSdDocument":"740517"},{"deliveryDocument":"80738049","plant":"WB05","referenceSdDocument":"740518"},{"deliveryDocument":"80738050","plant":"WB05","referenceSdDocument":"740519"},{"deliveryDocument":"80738051","plant":"WB05","referenceSdDocument":"740520"},{"deliveryDocument":"80738052","plant":"WB05","referenceSdDocument":"740521"},{"deliveryDocument":"80738053","plant":"WB05","referenceSdDocument":"740522"},{"deliveryDocument":"80738054","plant":"WB05","referenceSdDocument":"740523"},{"deliveryDocument":"80738055","plant":"WB05","referenceSdDocument":"740524"},{"deliveryDocument":"80738056","plant":"WB05","referenceSdDocument":"740525"},{"deliveryDocument":"80738057","plant":"WB05","referenceSdDocument":"740526"},{"deliveryDocument":"80738058","plant":"WB05","referenceSdDocument":"740527"},{"deliveryDocument":"80738059","plant":"WB05","referenceSdDocument":"740528"},{"deliveryDocument":"80738060","plant":"WB05","referenceSdDocument":"740529"},{"deliveryDocument":"80738061","plant":"WB05","referenceSdDocument":"740530"},{"deliveryDocument":"80738062","plant":"WB05","referenceSdDocument":"740531"}];
+
+  const addedDeliveries = new Set();
+  delivItems.forEach(di => {
+    if (!sampleSOIds.has(di.referenceSdDocument)) return;
+    const delId = 'del_' + di.deliveryDocument;
+    if (!nodeSet.has(delId)) {
+      nodes.push({ id: delId, type: 'Delivery', label: di.deliveryDocument, data: di, size: 7 });
+      nodeSet.add(delId);
+    }
+    const soId = 'so_' + di.referenceSdDocument;
+    if (!addedDeliveries.has(delId + soId)) {
+      links.push({ source: soId, target: delId, rel: 'DELIVERED_VIA' });
+      addedDeliveries.add(delId + soId);
+    }
+  });
+
+  // Billing docs (subset)
+  const billingLinks = [
+    {billingDocument:"91150217",referenceSdDocument:"80738040",soldToParty:"320000083",totalNetAmount:"229.66"},
+    {billingDocument:"91150216",referenceSdDocument:"80738041",soldToParty:"320000083",totalNetAmount:"221.19"},
+    {billingDocument:"91150215",referenceSdDocument:"80738042",soldToParty:"320000083",totalNetAmount:"250"},
+    {billingDocument:"91150214",referenceSdDocument:"80738043",soldToParty:"320000083",totalNetAmount:"249.15"},
+    {billingDocument:"91150213",referenceSdDocument:"80738044",soldToParty:"320000083",totalNetAmount:"363.56"},
+    {billingDocument:"91150212",referenceSdDocument:"80738045",soldToParty:"320000083",totalNetAmount:"363.56"},
+    {billingDocument:"91150211",referenceSdDocument:"80738046",soldToParty:"320000083",totalNetAmount:"363.56"},
+    {billingDocument:"91150210",referenceSdDocument:"80738047",soldToParty:"320000083",totalNetAmount:"272.88"},
+    {billingDocument:"91150209",referenceSdDocument:"80738048",soldToParty:"320000083",totalNetAmount:"363.56"},
+    {billingDocument:"91150208",referenceSdDocument:"80738049",soldToParty:"320000083",totalNetAmount:"363.56"},
+    {billingDocument:"91150207",referenceSdDocument:"80738050",soldToParty:"320000083",totalNetAmount:"329.66"},
+    {billingDocument:"91150206",referenceSdDocument:"80738051",soldToParty:"320000083",totalNetAmount:"253.39"},
+    {billingDocument:"91150205",referenceSdDocument:"80738052",soldToParty:"320000083",totalNetAmount:"363.56"},
+    {billingDocument:"91150204",referenceSdDocument:"80738053",soldToParty:"320000083",totalNetAmount:"329.66"},
+    {billingDocument:"91150203",referenceSdDocument:"80738054",soldToParty:"320000083",totalNetAmount:"363.56"},
+    {billingDocument:"91150202",referenceSdDocument:"80738055",soldToParty:"320000083",totalNetAmount:"253.39"},
+    {billingDocument:"91150201",referenceSdDocument:"80738056",soldToParty:"320000083",totalNetAmount:"215.25"},
+    {billingDocument:"91150200",referenceSdDocument:"80738057",soldToParty:"320000083",totalNetAmount:"185.59"},
+    {billingDocument:"91150199",referenceSdDocument:"80738058",soldToParty:"320000083",totalNetAmount:"449.24"},
+    {billingDocument:"91150198",referenceSdDocument:"80738059",soldToParty:"320000083",totalNetAmount:"253.39"},
+    {billingDocument:"91150197",referenceSdDocument:"80738060",soldToParty:"320000083",totalNetAmount:"216.1"},
+    {billingDocument:"91150196",referenceSdDocument:"80738061",soldToParty:"320000083",totalNetAmount:"179.66"},
+    {billingDocument:"91150195",referenceSdDocument:"80738062",soldToParty:"320000083",totalNetAmount:"215.25"},
+    {billingDocument:"90504248",referenceSdDocument:"80738072",soldToParty:"320000083",totalNetAmount:"216.1"},
+  ];
+
+  billingLinks.forEach(b => {
+    const delId = 'del_' + b.referenceSdDocument;
+    if (!nodeSet.has(delId)) return;
+    const bilId = 'bil_' + b.billingDocument;
+    if (!nodeSet.has(bilId)) {
+      nodes.push({ id: bilId, type: 'BillingDoc', label: b.billingDocument, data: b, size: 7 });
+      nodeSet.add(bilId);
+    }
+    links.push({ source: delId, target: bilId, rel: 'BILLED_AS' });
+
+    // Journal entries
+    const jeId = 'je_' + b.billingDocument;
+    if (!nodeSet.has(jeId)) {
+      nodes.push({ id: jeId, type: 'JournalEntry', label: 'JE-' + b.billingDocument.slice(-4), data: {accountingDocument: b.billingDocument, customer: b.soldToParty}, size: 6 });
+      nodeSet.add(jeId);
+    }
+    links.push({ source: bilId, target: jeId, rel: 'POSTED_TO' });
+  });
+
+  // Filter by type if needed
+  let filtNodes = nodes;
+  let filtLinks = links;
+  if (filter !== 'all') {
+    filtNodes = nodes.filter(n => n.type === filter);
+    const filtIds = new Set(filtNodes.map(n => n.id));
+    filtLinks = links.filter(l => filtIds.has(typeof l.source === 'string' ? l.source : l.source.id) && filtIds.has(typeof l.target === 'string' ? l.target : l.target.id));
+  }
+
+  return { nodes: filtNodes, links: filtLinks };
+}
+
+// ========== COLOR MAP ==========
+const typeColors = {
+  Customer: 'var(--node-customer)',
+  SalesOrder: 'var(--node-so)',
+  Delivery: 'var(--node-delivery)',
+  BillingDoc: 'var(--node-billing)',
+  JournalEntry: 'var(--node-journal)',
+  Payment: 'var(--node-payment)',
+};
+
+const typeCSSColors = {
+  Customer: '#7c3aed',
+  SalesOrder: '#2563eb',
+  Delivery: '#0891b2',
+  BillingDoc: '#059669',
+  JournalEntry: '#d97706',
+  Payment: '#dc2626',
+};
+
+// ========== GRAPH RENDERING ==========
+let simulation, svgEl, gEl, zoomBehavior;
+let showLabels = true;
+let currentFilter = 'all';
+let highlightedNodes = new Set();
+
+function initGraph() {
+  const { nodes, links } = buildGraphData(currentFilter);
+
+  document.getElementById('node-count').textContent = nodes.length;
+  document.getElementById('edge-count').textContent = links.length;
+
+  const container = document.querySelector('.graph-area');
+  const W = container.clientWidth;
+  const H = container.clientHeight;
+
+  svgEl = d3.select('#graph-svg');
+  svgEl.selectAll('*').remove();
+
+  // Defs / arrow markers
+  const defs = svgEl.append('defs');
+  Object.entries(typeCSSColors).forEach(([type, color]) => {
+    defs.append('marker')
+      .attr('id', 'arrow-' + type)
+      .attr('viewBox', '0 -5 10 10')
+      .attr('refX', 18)
+      .attr('refY', 0)
+      .attr('markerWidth', 6)
+      .attr('markerHeight', 6)
+      .attr('orient', 'auto')
+      .append('path')
+      .attr('d', 'M0,-5L10,0L0,5')
+      .attr('fill', color)
+      .attr('opacity', 0.5);
+  });
+
+  zoomBehavior = d3.zoom()
+    .scaleExtent([0.1, 4])
+    .on('zoom', (event) => {
+      gEl.attr('transform', event.transform);
+    });
+
+  svgEl.call(zoomBehavior);
+
+  gEl = svgEl.append('g');
+
+  simulation = d3.forceSimulation(nodes)
+    .force('link', d3.forceLink(links).id(d => d.id).distance(d => {
+      if (d.source.type === 'Customer') return 120;
+      return 60;
+    }).strength(0.7))
+    .force('charge', d3.forceManyBody().strength(-180))
+    .force('center', d3.forceCenter(W / 2, H / 2))
+    .force('collision', d3.forceCollide().radius(d => d.size + 6));
+
+  // Links
+  const link = gEl.append('g').attr('class', 'links')
+    .selectAll('line')
+    .data(links)
+    .join('line')
+    .attr('class', 'link')
+    .attr('stroke', d => {
+      const targetNode = nodes.find(n => n.id === (typeof d.target === 'string' ? d.target : d.target.id));
+      return targetNode ? typeCSSColors[targetNode.type] || '#2a2f40' : '#2a2f40';
+    })
+    .attr('stroke-opacity', 0.4)
+    .attr('stroke-width', 1);
+
+  // Node groups
+  const node = gEl.append('g').attr('class', 'nodes')
+    .selectAll('g')
+    .data(nodes)
+    .join('g')
+    .attr('class', d => 'node node-' + d.type)
+    .attr('data-id', d => d.id)
+    .call(d3.drag()
+      .on('start', (event, d) => {
+        if (!event.active) simulation.alphaTarget(0.3).restart();
+        d.fx = d.x; d.fy = d.y;
+      })
+      .on('drag', (event, d) => { d.fx = event.x; d.fy = event.y; })
+      .on('end', (event, d) => {
+        if (!event.active) simulation.alphaTarget(0);
+        d.fx = null; d.fy = null;
+      })
+    )
+    .on('click', (event, d) => showNodeInfo(d, event));
+
+  node.append('circle')
+    .attr('r', d => d.size)
+    .attr('fill', d => typeCSSColors[d.type] || '#64748b')
+    .attr('fill-opacity', 0.85)
+    .attr('stroke', d => typeCSSColors[d.type] || '#64748b')
+    .attr('stroke-width', 1.5)
+    .attr('stroke-opacity', 0.6);
+
+  node.append('text')
+    .attr('dy', d => d.size + 10)
+    .text(d => d.label.slice(0, 10))
+    .attr('display', showLabels ? null : 'none');
+
+  simulation.on('tick', () => {
+    link
+      .attr('x1', d => d.source.x)
+      .attr('y1', d => d.source.y)
+      .attr('x2', d => d.target.x)
+      .attr('y2', d => d.target.y);
+
+    node.attr('transform', d => `translate(${d.x},${d.y})`);
+  });
+
+  // Zoom controls
+  document.getElementById('zoom-in').onclick = () => svgEl.transition().call(zoomBehavior.scaleBy, 1.3);
+  document.getElementById('zoom-out').onclick = () => svgEl.transition().call(zoomBehavior.scaleBy, 0.77);
+  document.getElementById('zoom-fit').onclick = fitGraph;
+  document.getElementById('toggle-labels').onclick = () => {
+    showLabels = !showLabels;
+    gEl.selectAll('.node text').attr('display', showLabels ? null : 'none');
+  };
+
+  // Auto fit after simulation stabilizes
+  setTimeout(fitGraph, 2500);
+}
+
+function fitGraph() {
+  if (!svgEl || !gEl) return;
+  const container = document.querySelector('.graph-area');
+  const W = container.clientWidth;
+  const H = container.clientHeight;
+  const bounds = gEl.node().getBBox();
+  if (bounds.width === 0) return;
+  const scale = Math.min(0.9, Math.min(W / bounds.width, H / bounds.height)) * 0.85;
+  const tx = (W - bounds.width * scale) / 2 - bounds.x * scale;
+  const ty = (H - bounds.height * scale) / 2 - bounds.y * scale;
+  svgEl.transition().duration(600).call(zoomBehavior.transform, d3.zoomIdentity.translate(tx, ty).scale(scale));
+}
+
+// ========== NODE INFO PANEL ==========
+function showNodeInfo(d, event) {
+  const panel = document.getElementById('info-panel');
+  const title = document.getElementById('info-title');
+  const body = document.getElementById('info-body');
+  const conns = document.getElementById('info-connections');
+
+  const typeColor = typeCSSColors[d.type] || '#fff';
+
+  title.innerHTML = `<span style="width:8px;height:8px;border-radius:50%;background:${typeColor};display:inline-block"></span> ${d.type}`;
+
+  let rows = '';
+  const data = d.data || {};
+  const relevantKeys = {
+    Customer: ['businessPartner', 'businessPartnerFullName'],
+    SalesOrder: ['salesOrder', 'soldToParty', 'totalNetAmount', 'transactionCurrency', 'creationDate', 'overallDeliveryStatus'],
+    Delivery: ['deliveryDocument', 'referenceSdDocument', 'plant'],
+    BillingDoc: ['billingDocument', 'soldToParty', 'totalNetAmount', 'referenceSdDocument'],
+    JournalEntry: ['accountingDocument', 'customer', 'glAccount'],
+  };
+
+  const keys = relevantKeys[d.type] || Object.keys(data).slice(0, 6);
+
+  keys.forEach(k => {
+    if (data[k] !== undefined && data[k] !== null && data[k] !== '') {
+      let val = data[k];
+      if (k === 'creationDate') val = val.split('T')[0];
+      if (k === 'soldToParty' || k === 'customer') {
+        const name = custMap[val];
+        if (name) val = `${val}\n(${name})`;
+      }
+      if (k === 'overallDeliveryStatus') val = val === 'C' ? '✓ Complete' : val === 'A' ? '⚠ Pending' : val;
+      rows += `<div class="info-row"><span class="info-key">${k}</span><span class="info-val">${val}</span></div>`;
+    }
+  });
+
+  body.innerHTML = rows || '<div style="color:var(--text3)">No details</div>';
+
+  // Count connections
+  const links = gEl ? gEl.selectAll('.link') : null;
+  let connCount = 0;
+  if (links) {
+    links.each(function(l) {
+      const sid = typeof l.source === 'object' ? l.source.id : l.source;
+      const tid = typeof l.target === 'object' ? l.target.id : l.target;
+      if (sid === d.id || tid === d.id) connCount++;
+    });
+  }
+  conns.textContent = `${connCount} connection${connCount !== 1 ? 's' : ''} in current view`;
+
+  panel.style.display = 'block';
+
+  // Highlight connected nodes
+  highlightNode(d.id);
+}
+
+function highlightNode(nodeId) {
+  if (!gEl) return;
+  gEl.selectAll('.node circle').each(function(d) {
+    d3.select(this).attr('stroke-width', d.id === nodeId ? 3 : 1.5)
+      .attr('stroke-opacity', d.id === nodeId ? 1 : 0.6)
+      .attr('r', d.id === nodeId ? d.size * 1.3 : d.size);
+  });
+
+  gEl.selectAll('.link').each(function(l) {
+    const sid = typeof l.source === 'object' ? l.source.id : l.source;
+    const tid = typeof l.target === 'object' ? l.target.id : l.target;
+    const active = sid === nodeId || tid === nodeId;
+    d3.select(this)
+      .attr('stroke-opacity', active ? 0.9 : 0.2)
+      .attr('stroke-width', active ? 2 : 1);
+  });
+}
+
+document.getElementById('info-close').addEventListener('click', () => {
+  document.getElementById('info-panel').style.display = 'none';
+  if (gEl) {
+    gEl.selectAll('.node circle').each(function(d) {
+      d3.select(this).attr('stroke-width', 1.5).attr('stroke-opacity', 0.6).attr('r', d.size);
+    });
+    gEl.selectAll('.link').attr('stroke-opacity', 0.4).attr('stroke-width', 1);
+  }
+});
+
+// ========== FILTER BUTTONS ==========
+document.querySelectorAll('.filter-btn').forEach(btn => {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    this.classList.add('active');
+    currentFilter = this.dataset.type;
+    initGraph();
+  });
+});
+
+// ========== HIGHLIGHT NODES FROM CHAT ==========
+function highlightNodesFromText(text) {
+  if (!gEl) return;
+  // Reset
+  gEl.selectAll('.node circle').each(function(d) {
+    d3.select(this).attr('stroke-width', 1.5).attr('stroke-opacity', 0.6).attr('r', d.size)
+      .attr('stroke', typeCSSColors[d.type] || '#fff');
+  });
+
+  // Find mentioned IDs in text
+  const mentioned = new Set();
+  gEl.selectAll('.node').each(function(d) {
+    if (text.includes(d.label) || text.includes(d.data && d.data.salesOrder) || text.includes(d.data && d.data.billingDocument)) {
+      mentioned.add(d.id);
+    }
+  });
+
+  if (mentioned.size > 0) {
+    gEl.selectAll('.node circle').each(function(d) {
+      if (mentioned.has(d.id)) {
+        d3.select(this)
+          .attr('stroke', 'gold')
+          .attr('stroke-width', 3)
+          .attr('stroke-opacity', 1)
+          .attr('r', d.size * 1.4);
+      }
+    });
+  }
+}
+
+// ========== CHAT LOGIC ==========
+const chatMessages = document.getElementById('chat-messages');
+const chatInput = document.getElementById('chat-input');
+const sendBtn = document.getElementById('send-btn');
+const statusDot = document.getElementById('status-dot');
+const statusText = document.getElementById('status-text');
+
+let conversationHistory = [];
+
+function setStatus(thinking) {
+  if (thinking) {
+    statusDot.className = 'status-dot thinking';
+    statusText.textContent = 'Thinking...';
+    sendBtn.disabled = true;
+  } else {
+    statusDot.className = 'status-dot';
+    statusText.textContent = 'Ready';
+    sendBtn.disabled = false;
+  }
+}
+
+function addMessage(role, content) {
+  const div = document.createElement('div');
+  div.className = `msg ${role}`;
+
+  const label = document.createElement('div');
+  label.className = 'msg-label';
+  label.textContent = role === 'user' ? 'You' : 'Graph AI';
+
+  const bubble = document.createElement('div');
+  bubble.className = 'msg-bubble';
+  bubble.innerHTML = formatMessage(content);
+
+  div.appendChild(label);
+  div.appendChild(bubble);
+  chatMessages.appendChild(div);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+
+  return div;
+}
+
+function formatMessage(text) {
+  // Convert markdown-ish formatting
+  text = text
+    .replace(/```([^`]+)```/g, '<pre>$1</pre>')
+    .replace(/`([^`]+)`/g, '<span class="highlight">$1</span>')
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/\n\n/g, '<br><br>')
+    .replace(/\n/g, '<br>')
+    .replace(/#{1,3} (.+)/g, '<strong>$1</strong><br>');
+
+  return text;
+}
+
+function addLoadingIndicator() {
+  const div = document.createElement('div');
+  div.className = 'msg assistant';
+  div.id = 'loading-msg';
+
+  const label = document.createElement('div');
+  label.className = 'msg-label';
+  label.textContent = 'Graph AI';
+
+  const loading = document.createElement('div');
+  loading.className = 'loading-dots';
+  loading.innerHTML = '<span></span><span></span><span></span>';
+
+  div.appendChild(label);
+  div.appendChild(loading);
+  chatMessages.appendChild(div);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+  return div;
+}
+
+// GUARDRAILS - check if question is domain-relevant
+const DOMAIN_KEYWORDS = [
+  'order', 'sales', 'delivery', 'billing', 'invoice', 'payment', 'journal',
+  'customer', 'product', 'material', 'plant', 'document', 'flow', 'trace',
+  'o2c', 'sap', 'amount', 'quantity', 'status', 'shipment', 'chart',
+  'list', 'show', 'find', 'which', 'how many', 'what', 'top', 'highest',
+  'lowest', 'total', 'count', 'incomplete', 'broken', 'cancelled', 'unpaid',
+  'cleared', 'delivered', 'undelivered', 'pending', 'complete', 'value',
+  'business partner', 'accounting', 'gl account', 'fiscal', 'period',
+  'report', 'analyze', 'summary', 'distribution', '7405', '9050', '9115',
+  '8073', '8075', '3200', '3100', '310000', '320000', 'inr', 'currency'
+];
+
+function isDomainRelevant(query) {
+  const q = query.toLowerCase();
+  return DOMAIN_KEYWORDS.some(k => q.includes(k)) ||
+    /\d{6,}/.test(query); // Contains IDs
+}
+
+async function sendMessage(userQuery) {
+  if (!userQuery.trim()) return;
+
+  // Check domain relevance
+  if (!isDomainRelevant(userQuery)) {
+    addMessage('user', userQuery);
+    addMessage('assistant', 'This system is designed to answer questions related to the **Order-to-Cash dataset** only.\n\nI can help you analyze sales orders, deliveries, billing documents, journal entries, payments, customers, and product flows within this SAP O2C dataset. Please ask something related to the business data.');
+    return;
+  }
+
+  addMessage('user', userQuery);
+  conversationHistory.push({ role: 'user', content: userQuery });
+
+  setStatus(true);
+  const loadingEl = addLoadingIndicator();
+
+  try {
+    const systemPrompt = `You are an intelligent data analyst for a SAP Order-to-Cash (O2C) graph system. You have access to a comprehensive dataset and must answer questions ONLY about this dataset.
+
+${DATA_CONTEXT}
+
+STRICT RULES:
+1. Only answer questions about the O2C dataset above. If asked anything unrelated (general knowledge, creative writing, etc.), decline politely.
+2. Be precise and data-driven. Reference actual IDs, amounts, and counts from the dataset.
+3. When showing data, use markdown tables where helpful.
+4. For "trace" queries, show the full flow: Customer → Sales Order → Delivery → Billing → Journal → Payment.
+5. For "broken flows" queries, identify SOs where the flow is incomplete.
+6. Use \`code formatting\` for IDs and document numbers.
+7. Keep responses concise but complete.
+
+DATASET KEY FACTS FOR REFERENCE:
+- 8 customers, 100 sales orders, 86 deliveries, 163 billing docs, 123 journal entries, 120 payments
+- Orders 740584-740605: NOT delivered (status "A") - these belong to Melton Group & Henderson
+- Billing doc series 90504xxx and 90678xxx = CANCELLED
+- Billing doc series 91150xxx = ACTIVE (replacements)
+- Largest customer: Nelson, Fitzpatrick and Jordan (320000083) with ~65 orders
+- Most billing docs reference deliveries via referenceSdDocument field`;
+
+const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${API_KEY}`
+  },
+  body: JSON.stringify({
+    model: 'llama-3.3-70b-versatile',
+    max_tokens: 1000,
+    messages: [
+      { role: 'system', content: systemPrompt },
+      ...conversationHistory
+    ]
+  })
+});
+
+const data = await response.json();
+
+
+    loadingEl.remove();
+
+    if (data.error) {
+      addMessage('assistant', `❌ API Error: ${data.error.message || JSON.stringify(data.error)}`);
+      conversationHistory.pop();
+    } else {
+      const reply = data.choices[0].message.content;
+      conversationHistory.push({ role: 'assistant', content: reply });
+      addMessage('assistant', reply);
+      highlightNodesFromText(reply + ' ' + userQuery);
+    }
+  } catch (err) {
+    loadingEl.remove();
+    addMessage('assistant', `❌ Network error: ${err.message}. Please check your API key and try again.`);
+    conversationHistory.pop();
+  }
+
+  setStatus(false);
+}
+
+// Event listeners
+sendBtn.addEventListener('click', () => {
+  sendMessage(chatInput.value.trim());
+  chatInput.value = '';
+  chatInput.style.height = 'auto';
+});
+
+chatInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage(chatInput.value.trim());
+    chatInput.value = '';
+    chatInput.style.height = 'auto';
+  }
+});
+
+chatInput.addEventListener('input', () => {
+  chatInput.style.height = 'auto';
+  chatInput.style.height = Math.min(chatInput.scrollHeight, 80) + 'px';
+});
+
+// Suggestion chips
+document.querySelectorAll('.suggestion-chip').forEach(chip => {
+  chip.addEventListener('click', () => {
+    const q = chip.dataset.q;
+    sendMessage(q);
+  });
+});
+</script>
+</body>
+</html>
