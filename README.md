@@ -442,7 +442,6 @@ See `ai-session-logs/claude-session-transcript.md` for the full transcript.
 
 **Tool used:** Claude.ai (claude-sonnet-4-20250514)  
 **Session date:** 26 March 2025  
-**Approach:** Full-context single-turn prompt → complete system → targeted refinement
 
 ---
 
